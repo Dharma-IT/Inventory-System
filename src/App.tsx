@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import './App.css'
+import { database } from './supabase'
 
 type Product = { id: string; name: string; sku: string; opening: number; received: number; shipped: number; weekly: number; lead: number }
 type Movement = { id: string; date: string; productId: string; type: 'Receipt' | 'Shipment'; quantity: number; note: string }
@@ -32,39 +33,78 @@ const status = (p: Product) => stock(p) < minimum(p) ? 'Restock' : minimum(p) > 
 const fmt = new Intl.NumberFormat('en-US')
 
 function App() {
-  const [products, setProducts] = useState<Product[]>(() => JSON.parse(localStorage.getItem('dharma-products') || 'null') || seedProducts)
-  const [movements, setMovements] = useState<Movement[]>(() => JSON.parse(localStorage.getItem('dharma-movements') || 'null') || seedMovements)
+  const [products, setProducts] = useState<Product[]>([])
+  const [movements, setMovements] = useState<Movement[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [databaseError, setDatabaseError] = useState('')
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<'All' | 'Healthy' | 'Low' | 'Restock'>('All')
   const [modal, setModal] = useState<'product' | 'movement' | 'sale' | null>(null)
-  const [saleProductId, setSaleProductId] = useState(seedProducts[0].id)
+  const [saleProductId, setSaleProductId] = useState('')
   const [editing, setEditing] = useState<Product | null>(null)
   const [view, setView] = useState<'inventory' | 'activity'>('inventory')
 
-  const persistProducts = (next: Product[]) => { setProducts(next); localStorage.setItem('dharma-products', JSON.stringify(next)) }
-  const persistMovements = (next: Movement[]) => { setMovements(next); localStorage.setItem('dharma-movements', JSON.stringify(next)) }
+  useEffect(() => {
+    async function loadInventory() {
+      try {
+        let remoteProducts = await database.products()
+        if (!remoteProducts.length) {
+          await database.seedProducts(seedProducts)
+          remoteProducts = await database.products()
+        }
+        const remoteMovements = await database.movements()
+        setProducts(remoteProducts)
+        setMovements(remoteMovements.map(m => ({ ...m, productId: m.product_id })))
+        setSaleProductId(remoteProducts[0]?.id || '')
+      } catch (error) {
+        setDatabaseError(error instanceof Error ? error.message : 'Could not connect to Supabase.')
+        setProducts(seedProducts)
+        setMovements(seedMovements)
+        setSaleProductId(seedProducts[0].id)
+      } finally { setLoading(false) }
+    }
+    void loadInventory()
+  }, [])
   const visible = useMemo(() => products.filter(p => (p.name + ' ' + p.sku).toLowerCase().includes(query.toLowerCase()) && (filter === 'All' || status(p) === filter)), [products, query, filter])
   const healthy = products.filter(p => status(p) === 'Healthy').length
   const attention = products.length - healthy
   const total = products.reduce((n, p) => n + stock(p), 0)
   const reorderUnits = products.reduce((n, p) => n + (stock(p) < minimum(p) ? Math.max(0, maximum(p) - stock(p)) : 0), 0)
 
-  function saveProduct(e: FormEvent<HTMLFormElement>) {
+  async function saveProduct(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); const data = new FormData(e.currentTarget)
     const sku = String(data.get('sku')).trim(); const name = String(data.get('name')).trim()
     const next: Product = { id: editing?.id || `${sku}-${Date.now()}`, sku, name, opening: +String(data.get('opening')), received: editing?.received || 0, shipped: editing?.shipped || 0, weekly: +String(data.get('weekly')), lead: +String(data.get('lead')) }
-    persistProducts(editing ? products.map(p => p.id === editing.id ? next : p) : [next, ...products]); setModal(null); setEditing(null)
+    setSaving(true); setDatabaseError('')
+    try {
+      await database.saveProduct(next, Boolean(editing))
+      setProducts(editing ? products.map(p => p.id === editing.id ? next : p) : [next, ...products]); setModal(null); setEditing(null)
+    } catch (error) { setDatabaseError(error instanceof Error ? error.message : 'Unable to save product.') }
+    finally { setSaving(false) }
   }
-  function saveMovement(e: FormEvent<HTMLFormElement>) {
+  async function saveMovement(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); const data = new FormData(e.currentTarget); const productId = String(data.get('product')); const type = String(data.get('type')) as 'Receipt' | 'Shipment'; const quantity = +String(data.get('quantity'))
-    persistProducts(products.map(p => p.id === productId ? { ...p, [type === 'Receipt' ? 'received' : 'shipped']: p[type === 'Receipt' ? 'received' : 'shipped'] + quantity } : p))
-    persistMovements([{ id: crypto.randomUUID(), date: String(data.get('date')), productId, type, quantity, note: String(data.get('note')) }, ...movements]); setModal(null)
+    const movement = { date: String(data.get('date')), product_id: productId, type, quantity, note: String(data.get('note')) }
+    setSaving(true); setDatabaseError('')
+    try {
+      const saved = await database.recordMovement(movement)
+      setProducts(products.map(p => p.id === productId ? { ...p, [type === 'Receipt' ? 'received' : 'shipped']: p[type === 'Receipt' ? 'received' : 'shipped'] + quantity } : p))
+      setMovements([{ ...saved, productId: saved.product_id }, ...movements]); setModal(null)
+    } catch (error) { setDatabaseError(error instanceof Error ? error.message : 'Unable to record movement.') }
+    finally { setSaving(false) }
   }
-  function saveSale(e: FormEvent<HTMLFormElement>) {
+  async function saveSale(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); const data = new FormData(e.currentTarget); const productId = String(data.get('product')); const quantity = +String(data.get('quantity')); const selected = products.find(p => p.id === productId)
     if (!selected || quantity < 1 || quantity > stock(selected)) return
-    persistProducts(products.map(p => p.id === productId ? { ...p, shipped: p.shipped + quantity } : p))
-    persistMovements([{ id: crypto.randomUUID(), date: String(data.get('date')), productId, type: 'Shipment', quantity, note: String(data.get('note')) || 'Sale' }, ...movements]); setModal(null)
+    const movement = { date: String(data.get('date')), product_id: productId, type: 'Shipment' as const, quantity, note: String(data.get('note')) || 'Sale' }
+    setSaving(true); setDatabaseError('')
+    try {
+      const saved = await database.recordMovement(movement)
+      setProducts(products.map(p => p.id === productId ? { ...p, shipped: p.shipped + quantity } : p))
+      setMovements([{ ...saved, productId: saved.product_id }, ...movements]); setModal(null)
+    } catch (error) { setDatabaseError(error instanceof Error ? error.message : 'Unable to record sale.') }
+    finally { setSaving(false) }
   }
 
   return <div className="app-shell">
@@ -75,6 +115,8 @@ function App() {
       <div className="user"><div>JD</div><p><strong>Inventory team</strong><span>Operations</span></p></div>
     </aside>
     <main>
+      {databaseError && <div className="database-error"><strong>Database notice.</strong> {databaseError}</div>}
+      {loading && <div className="loading">Loading inventory…</div>}
       <header><div><p className="eyebrow">OPERATIONS / {view.toUpperCase()}</p><h1>{view === 'inventory' ? 'Inventory overview' : 'Stock activity'}</h1><p>{view === 'inventory' ? 'Know what is available and what needs action.' : 'Every receipt and shipment in one place.'}</p></div><div className="actions"><button className="secondary" onClick={() => setModal('movement')}>↕ Record movement</button><button className="secondary" onClick={() => { setEditing(null); setModal('product') }}>＋ Add product</button><button className="primary sale-button" onClick={() => { setSaleProductId(products[0]?.id || ''); setModal('sale') }}>− Record sale</button></div></header>
       {view === 'inventory' ? <>
         <section className="metrics">
@@ -90,7 +132,7 @@ function App() {
         </section>
       </> : <section className="panel activity-panel"><div className="activity-head"><div><h2>Movement log</h2><p>Newest transactions appear first.</p></div><div className="actions"><button className="secondary" onClick={() => setModal('movement')}>＋ New movement</button><button className="primary" onClick={() => { setSaleProductId(products[0]?.id || ''); setModal('sale') }}>− Record sale</button></div></div><div className="table-wrap"><table><thead><tr><th>Date</th><th>Product</th><th>Type</th><th>Quantity</th><th>Reference / note</th></tr></thead><tbody>{movements.map(m => { const p = products.find(x => x.id === m.productId); return <tr key={m.id}><td>{new Date(m.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td><td><strong>{p?.name || 'Unknown product'}</strong><small className="block">{p?.sku}</small></td><td><span className={`move ${m.type.toLowerCase()}`}>{m.type === 'Receipt' ? '↓' : '↑'} {m.type}</span></td><td><strong>{fmt.format(m.quantity)}</strong></td><td>{m.note || '—'}</td></tr> })}</tbody></table></div></section>}
     </main>
-    {modal && <div className="overlay" onMouseDown={e => { if (e.target === e.currentTarget) { setModal(null); setEditing(null) } }}><div className="modal">
+    {modal && <div className="overlay" onMouseDown={e => { if (e.target === e.currentTarget && !saving) { setModal(null); setEditing(null) } }}><div className="modal">
       <button className="close" onClick={() => { setModal(null); setEditing(null) }}>×</button>
       {modal === 'product' ? <><p className="eyebrow">PRODUCT DETAILS</p><h2>{editing ? 'Edit product' : 'Add a product'}</h2><p className="modal-copy">Set the stock drivers used to calculate its reorder point.</p><form onSubmit={saveProduct}><label>Product name<input name="name" required defaultValue={editing?.name} /></label><label>SKU / code<input name="sku" required defaultValue={editing?.sku} /></label><div className="form-row"><label>Opening stock<input name="opening" type="number" min="0" required defaultValue={editing?.opening || 0} /></label><label>Weekly usage<input name="weekly" type="number" min="0" required defaultValue={editing?.weekly || 0} /></label></div><label>Supplier lead time (days)<input name="lead" type="number" min="0" required defaultValue={editing?.lead || 0} /></label><button className="primary full">{editing ? 'Save changes' : 'Add product'}</button></form></>
         : modal === 'sale' ? <><p className="eyebrow">OUTGOING STOCK</p><h2>Record a sale</h2><p className="modal-copy">Choose a product and quantity. Saving the sale subtracts it from inventory.</p><form onSubmit={saveSale}><label>Product<select name="product" required value={saleProductId} onChange={e => setSaleProductId(e.target.value)}>{products.filter(p => stock(p) > 0).map(p => <option value={p.id} key={p.id}>{p.name} · {fmt.format(stock(p))} available</option>)}</select></label><label>Quantity sold<input name="quantity" type="number" min="1" max={stock(products.find(p => p.id === saleProductId) || products[0])} required placeholder="Enter units sold" /><span className="field-help">{fmt.format(stock(products.find(p => p.id === saleProductId) || products[0]))} units currently available</span></label><label>Date<input name="date" type="date" required defaultValue={new Date().toISOString().slice(0, 10)} /></label><label>Order reference or note<input name="note" placeholder="e.g. Order #1042 or TikTok sales" /></label><button className="primary full">Save sale and subtract stock</button></form></>

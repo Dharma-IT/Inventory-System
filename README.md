@@ -1,5 +1,20 @@
 # React + TypeScript + Vite
 
+## Supabase setup
+
+The inventory UI persists products and stock movements in Supabase. Before the
+first run, open the project's Supabase SQL Editor and run
+[`supabase-schema.sql`](./supabase-schema.sql). This creates the tables, browser
+policies, and the atomic `record_movement` function used by receipts and sales.
+
+Copy `.env.example` to `.env.local` and set the project URL and publishable key.
+The secret key is server-only and is never included in the browser bundle.
+
+```sh
+npm install
+npm run dev
+```
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:
