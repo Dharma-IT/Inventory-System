@@ -124,12 +124,10 @@ const seedMovements: Movement[] = [
 const stock = (p: Product) => p.opening + p.received - p.shipped;
 const minimum = (p: Product) => Math.round((p.weekly / 5) * p.lead);
 const maximum = (p: Product) => minimum(p) + p.weekly * 4;
+const suggestedOrder = (p: Product) =>
+  stock(p) < minimum(p) ? Math.max(0, maximum(p) - stock(p)) : 0;
 const status = (p: Product) =>
-  stock(p) < minimum(p)
-    ? "Restock"
-    : minimum(p) > 0 && stock(p) <= minimum(p) * 1.25
-      ? "Low"
-      : "Healthy";
+  stock(p) < minimum(p) ? "Restock" : "Healthy";
 const fmt = new Intl.NumberFormat("en-US");
 
 function App() {
@@ -151,9 +149,7 @@ function App() {
   const [loadProgress, setLoadProgress] = useState(0);
   const [loadSeconds, setLoadSeconds] = useState(0);
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<"All" | "Healthy" | "Low" | "Restock">(
-    "All",
-  );
+  const [filter, setFilter] = useState<"All" | "Healthy" | "Restock">("All");
   const [modal, setModal] = useState<"product" | "movement" | "sale" | null>(
     null,
   );
@@ -214,11 +210,7 @@ function App() {
   const healthy = products.filter((p) => status(p) === "Healthy").length;
   const attention = products.length - healthy;
   const total = products.reduce((n, p) => n + stock(p), 0);
-  const reorderUnits = products.reduce(
-    (n, p) =>
-      n + (stock(p) < minimum(p) ? Math.max(0, maximum(p) - stock(p)) : 0),
-    0,
-  );
+  const reorderUnits = products.reduce((n, p) => n + suggestedOrder(p), 0);
 
   async function saveProduct(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -666,7 +658,7 @@ function App() {
                   />
                 </div>
                 <div className="filters">
-                  {(["All", "Healthy", "Low", "Restock"] as const).map((x) => (
+                  {(["All", "Healthy", "Restock"] as const).map((x) => (
                     <button
                       className={filter === x ? "selected" : ""}
                       onClick={() => setFilter(x)}
@@ -686,6 +678,7 @@ function App() {
                       <th>Min / Max</th>
                       <th>Weekly use</th>
                       <th>Lead time</th>
+                      <th>Suggested order</th>
                       <th>Status</th>
                       <th></th>
                     </tr>
@@ -712,7 +705,7 @@ function App() {
                             <div>
                               <i
                                 style={{
-                                  width: `${Math.min(100, maximum(p) ? (stock(p) / maximum(p)) * 100 : 100)}%`,
+                                  width: `${Math.max(0, Math.min(100, maximum(p) ? (stock(p) / maximum(p)) * 100 : 100))}%`,
                                 }}
                               />
                             </div>
@@ -721,6 +714,10 @@ function App() {
                         </td>
                         <td>{fmt.format(p.weekly)}</td>
                         <td>{p.lead} days</td>
+                        <td>
+                          <strong>{fmt.format(suggestedOrder(p))}</strong>{" "}
+                          <small>units</small>
+                        </td>
                         <td>
                           <span className={`badge ${status(p).toLowerCase()}`}>
                             ● {status(p)}
