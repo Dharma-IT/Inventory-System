@@ -151,10 +151,11 @@ function App() {
   const [loadSeconds, setLoadSeconds] = useState(0);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"All" | "Healthy" | "Restock">("All");
-  const [modal, setModal] = useState<"product" | "movement" | "sale" | null>(
+  const [modal, setModal] = useState<"product" | "movement" | "stock" | null>(
     null,
   );
-  const [saleProductId, setSaleProductId] = useState("");
+  const [stockProductId, setStockProductId] = useState("");
+  const [stockQuery, setStockQuery] = useState("");
   const [editing, setEditing] = useState<Product | null>(null);
   const [view, setView] = useState<"inventory" | "labels" | "activity">(
     "inventory",
@@ -173,7 +174,7 @@ function App() {
         setMovements(
           remoteMovements.map((m) => ({ ...m, productId: m.product_id })),
         );
-        setSaleProductId(remoteProducts[0]?.id || "");
+        setStockProductId(remoteProducts[0]?.id || "");
       } catch (error) {
         setDatabaseError(
           error instanceof Error
@@ -182,7 +183,7 @@ function App() {
         );
         setProducts(seedProducts);
         setMovements(seedMovements);
-        setSaleProductId(seedProducts[0].id);
+        setStockProductId(seedProducts[0].id);
       } finally {
         setLoading(false);
       }
@@ -379,6 +380,11 @@ function App() {
   const selectedVisibleLabels = visibleLabelOrders.filter((order) =>
     selectedOrders.has(order.id),
   ).length;
+  const stockMatches = products.filter((product) =>
+    `${product.name} ${product.sku}`
+      .toLowerCase()
+      .includes(stockQuery.trim().toLowerCase()),
+  );
 
   function renderOrderTable(title: string, groupOrders: ShopifyOrder[]) {
     if (!groupOrders.length) return null;
@@ -548,19 +554,19 @@ function App() {
       setSaving(false);
     }
   }
-  async function saveSale(e: FormEvent<HTMLFormElement>) {
+  async function saveStock(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const data = new FormData(e.currentTarget);
     const productId = String(data.get("product"));
     const quantity = +String(data.get("quantity"));
     const selected = products.find((p) => p.id === productId);
-    if (!selected || quantity < 1 || quantity > stock(selected)) return;
+    if (!selected || quantity < 1) return;
     const movement = {
       date: String(data.get("date")),
       product_id: productId,
-      type: "Shipment" as const,
+      type: "Receipt" as const,
       quantity,
-      note: String(data.get("note")) || "Sale",
+      note: String(data.get("note")) || "Stock added",
     };
     setSaving(true);
     setDatabaseError("");
@@ -568,14 +574,14 @@ function App() {
       const saved = await database.recordMovement(movement);
       setProducts(
         products.map((p) =>
-          p.id === productId ? { ...p, shipped: p.shipped + quantity } : p,
+          p.id === productId ? { ...p, received: p.received + quantity } : p,
         ),
       );
       setMovements([{ ...saved, productId: saved.product_id }, ...movements]);
       setModal(null);
     } catch (error) {
       setDatabaseError(
-        error instanceof Error ? error.message : "Unable to record sale.",
+        error instanceof Error ? error.message : "Unable to add stock.",
       );
     } finally {
       setSaving(false);
@@ -668,13 +674,14 @@ function App() {
                 ＋ Add product
               </button>
               <button
-                className="primary sale-button"
+                className="primary stock-button"
                 onClick={() => {
-                  setSaleProductId(products[0]?.id || "");
-                  setModal("sale");
+                  setStockQuery("");
+                  setStockProductId(products[0]?.id || "");
+                  setModal("stock");
                 }}
               >
-                − Record sale
+                ＋ Add stock
               </button>
             </div>
           )}
@@ -948,11 +955,12 @@ function App() {
                 <button
                   className="primary"
                   onClick={() => {
-                    setSaleProductId(products[0]?.id || "");
-                    setModal("sale");
+                    setStockQuery("");
+                    setStockProductId(products[0]?.id || "");
+                    setModal("stock");
                   }}
                 >
-                  − Record sale
+                  ＋ Add stock
                 </button>
               </div>
             </div>
@@ -1088,53 +1096,61 @@ function App() {
                   </button>
                 </form>
               </>
-            ) : modal === "sale" ? (
+            ) : modal === "stock" ? (
               <>
-                <p className="eyebrow">OUTGOING STOCK</p>
-                <h2>Record a sale</h2>
+                <p className="eyebrow">INCOMING STOCK</p>
+                <h2>Add stock</h2>
                 <p className="modal-copy">
-                  Choose a product and quantity. Saving the sale subtracts it
-                  from inventory.
+                  Search for a product and enter the quantity received.
                 </p>
-                <form onSubmit={saveSale}>
+                <form onSubmit={saveStock}>
+                  <label>
+                    Search product or SKU
+                    <input
+                      value={stockQuery}
+                      onChange={(event) => {
+                        const nextQuery = event.target.value;
+                        setStockQuery(nextQuery);
+                        const firstMatch = products.find((product) =>
+                          `${product.name} ${product.sku}`
+                            .toLowerCase()
+                            .includes(nextQuery.trim().toLowerCase()),
+                        );
+                        if (firstMatch) setStockProductId(firstMatch.id);
+                      }}
+                      placeholder="Start typing a product name or SKU"
+                      autoFocus
+                    />
+                  </label>
                   <label>
                     Product
                     <select
                       name="product"
                       required
-                      value={saleProductId}
-                      onChange={(e) => setSaleProductId(e.target.value)}
+                      value={stockProductId}
+                      onChange={(e) => setStockProductId(e.target.value)}
                     >
-                      {products
-                        .filter((p) => stock(p) > 0)
-                        .map((p) => (
-                          <option value={p.id} key={p.id}>
-                            {p.name} · {fmt.format(stock(p))} available
-                          </option>
-                        ))}
+                      {stockMatches.map((p) => (
+                        <option value={p.id} key={p.id}>
+                          {p.name} · {p.sku} · {fmt.format(stock(p))} currently
+                        </option>
+                      ))}
                     </select>
+                    {!stockMatches.length && (
+                      <span className="field-help">No matching products.</span>
+                    )}
                   </label>
                   <label>
-                    Quantity sold
+                    Quantity to add
                     <input
                       name="quantity"
                       type="number"
                       min="1"
-                      max={stock(
-                        products.find((p) => p.id === saleProductId) ||
-                          products[0],
-                      )}
                       required
-                      placeholder="Enter units sold"
+                      placeholder="Enter units received"
                     />
                     <span className="field-help">
-                      {fmt.format(
-                        stock(
-                          products.find((p) => p.id === saleProductId) ||
-                            products[0],
-                        ),
-                      )}{" "}
-                      units currently available
+                      This quantity will be added to the current stock.
                     </span>
                   </label>
                   <label>
@@ -1147,14 +1163,17 @@ function App() {
                     />
                   </label>
                   <label>
-                    Order reference or note
+                    Reference or note
                     <input
                       name="note"
-                      placeholder="e.g. Order #1042 or TikTok sales"
+                      placeholder="e.g. Supplier delivery #1042"
                     />
                   </label>
-                  <button className="primary full">
-                    Save sale and subtract stock
+                  <button
+                    className="primary full"
+                    disabled={saving || !stockMatches.length}
+                  >
+                    {saving ? "Adding stock…" : "Add stock to inventory"}
                   </button>
                 </form>
               </>
