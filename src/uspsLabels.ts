@@ -146,13 +146,17 @@ export function ordersToUspsCsv(orders: ShopifyOrder[], selectedDate?: string) {
     .join("\r\n");
 }
 
-export function downloadUspsCsv(orders: ShopifyOrder[], selectedDate?: string) {
+export function downloadUspsCsv(
+  orders: ShopifyOrder[],
+  selectedDate?: string,
+  groupName = "labels",
+) {
   const csv = ordersToUspsCsv(orders, selectedDate);
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `USPS-labels-${selectedDate || new Date().toISOString().slice(0, 10)}.csv`;
+  link.download = `USPS-${groupName}-${selectedDate || new Date().toISOString().slice(0, 10)}.csv`;
   link.click();
   URL.revokeObjectURL(url);
 }

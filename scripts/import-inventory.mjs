@@ -55,6 +55,25 @@ const aliases = new Map([
   [normalize("Collagen Peptides 280g – Unflavored"), "CPU-001"],
   [normalize("Collagen Peptides 378g – Chocolate Flavor"), "CPC-001"],
 ]);
+const englishProductNames = new Map([
+  ["ENV-001", "White Envelopes"],
+  ["ENV-002", "Green Envelope"],
+  ["LAB-001", "Label Roll"],
+]);
+
+function translateNote(note) {
+  const exact = new Map([
+    ["Recebimento Fornecedor", "Supplier receipt"],
+    ["Envios de Segunda-feira", "Monday shipments"],
+    ["Lote Grande de Recebimento", "Large receiving batch"],
+    ["Recebimento (250 x 12 rolos)", "Receipt (250 x 12 rolls)"],
+  ]);
+  if (exact.has(note)) return exact.get(note);
+  return note
+    .replace(/^Envios\b/, "Shipments")
+    .replace(/^Envio\b/, "Shipment")
+    .replace(/Tiktok/g, "TikTok");
+}
 
 function resolveProduct(label) {
   const code = label.match(/^([A-Z]+-\d{3})\s+-\s+/)?.[1];
@@ -66,7 +85,9 @@ function resolveProduct(label) {
 
 const products = summaryRows.map((row) => {
   const product = resolveProduct(row[0]);
-  const displayName = row[0].replace(/^[A-Z]+-\d{3}\s+-\s+/, "");
+  const displayName =
+    englishProductNames.get(product.id) ||
+    row[0].replace(/^[A-Z]+-\d{3}\s+-\s+/, "").replace(/\u0096/g, "–");
   const opening = number(row[1]), received = number(row[2]), shipped = number(row[3]);
   const weekly = number(row[5]), lead = number(row[6]);
   const current = opening + received - shipped;
@@ -92,7 +113,7 @@ const movements = movementRows.map((row) => {
   return {
     id: randomUUID(), date: date(row[0]), product_id: product.id,
     type: row[2].toLowerCase().includes("entrada") ? "Receipt" : "Shipment",
-    quantity: number(row[3]), note: row[4].trim(),
+    quantity: number(row[3]), note: translateNote(row[4].trim()),
   };
 });
 if (movements.length !== 42) throw new Error(`Expected 42 movements, found ${movements.length}.`);

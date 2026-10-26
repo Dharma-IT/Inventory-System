@@ -126,8 +126,7 @@ const minimum = (p: Product) => Math.round((p.weekly / 5) * p.lead);
 const maximum = (p: Product) => minimum(p) + p.weekly * 4;
 const suggestedOrder = (p: Product) =>
   stock(p) < minimum(p) ? Math.max(0, maximum(p) - stock(p)) : 0;
-const status = (p: Product) =>
-  stock(p) < minimum(p) ? "Restock" : "Healthy";
+const status = (p: Product) => (stock(p) < minimum(p) ? "Restock" : "Healthy");
 const fmt = new Intl.NumberFormat("en-US");
 
 function App() {
@@ -140,6 +139,7 @@ function App() {
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersError, setOrdersError] = useState("");
+  const [labelTab, setLabelTab] = useState<"tiktok" | "other">("tiktok");
   const [orderDate, setOrderDate] = useState(() =>
     new Intl.DateTimeFormat("en-CA", {
       timeZone: "America/New_York",
@@ -317,12 +317,18 @@ function App() {
     }
   }
 
-  function exportLabels() {
+  function exportLabels(source: "tiktok" | "other") {
     setOrdersError("");
     try {
+      const groupOrders = orders.filter((order) =>
+        source === "tiktok"
+          ? order.sourceName.toLowerCase().includes("tiktok")
+          : !order.sourceName.toLowerCase().includes("tiktok"),
+      );
       downloadUspsCsv(
-        orders.filter((order) => selectedOrders.has(order.id)),
+        groupOrders.filter((order) => selectedOrders.has(order.id)),
         orderDate,
+        source === "tiktok" ? "TikTok" : "Other-Sources",
       );
     } catch (error) {
       setOrdersError(
@@ -339,6 +345,10 @@ function App() {
   const otherOrders = orders.filter(
     (order) => !order.sourceName.toLowerCase().includes("tiktok"),
   );
+  const visibleLabelOrders = labelTab === "tiktok" ? tikTokOrders : otherOrders;
+  const selectedVisibleLabels = visibleLabelOrders.filter((order) =>
+    selectedOrders.has(order.id),
+  ).length;
 
   function renderOrderTable(title: string, groupOrders: ShopifyOrder[]) {
     if (!groupOrders.length) return null;
@@ -375,9 +385,14 @@ function App() {
                 </th>
                 <th>Order</th>
                 <th>Date</th>
+                <th>Source</th>
                 <th>Recipient</th>
-                <th>Ship to</th>
+                <th>Address</th>
+                <th>City / State / ZIP</th>
                 <th>Products</th>
+                <th>Payment</th>
+                <th>Fulfillment</th>
+                <th>Total</th>
               </tr>
             </thead>
             <tbody>
@@ -413,7 +428,6 @@ function App() {
                     </td>
                     <td>
                       <strong>{order.name}</strong>
-                      <small className="block">{order.sourceName}</small>
                     </td>
                     <td>
                       {new Date(order.createdAt).toLocaleTimeString("en-US", {
@@ -421,11 +435,13 @@ function App() {
                         minute: "2-digit",
                       })}
                     </td>
+                    <td>{order.sourceName}</td>
                     <td>
                       {address
                         ? `${address.firstName || ""} ${address.lastName || ""}`.trim()
                         : "Missing address"}
                     </td>
+                    <td>{address?.address1 || "—"}</td>
                     <td>
                       {address
                         ? `${address.city || ""}, ${address.provinceCode || ""} ${address.zip || ""}`
@@ -435,6 +451,25 @@ function App() {
                       {matchingItems
                         .map((item) => `${item.name} × ${item.quantity}`)
                         .join(", ")}
+                    </td>
+                    <td>
+                      <span className="order-status">
+                        {order.displayFinancialStatus.replaceAll("_", " ")}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="order-status">
+                        {order.displayFulfillmentStatus.replaceAll("_", " ")}
+                      </span>
+                    </td>
+                    <td className="order-total">
+                      {new Intl.NumberFormat("en-US", {
+                        style: "currency",
+                        currency:
+                          order.currentTotalPriceSet.shopMoney.currencyCode,
+                      }).format(
+                        Number(order.currentTotalPriceSet.shopMoney.amount),
+                      )}
                     </td>
                   </tr>
                 );
@@ -775,14 +810,6 @@ function App() {
                 >
                   {ordersLoading ? "Working…" : "Fetch orders"}
                 </button>
-                <button
-                  className="primary"
-                  onClick={exportLabels}
-                  disabled={!selectedOrders.size}
-                >
-                  Export {selectedOrders.size || ""} label
-                  {selectedOrders.size === 1 ? "" : "s"}
-                </button>
               </div>
             </div>
             {ordersError && <div className="labels-error">{ordersError}</div>}
@@ -818,9 +845,59 @@ function App() {
                 </p>
               </div>
             ) : (
-              <div className="label-groups">
-                {renderOrderTable("TikTok", tikTokOrders)}
-                {renderOrderTable("Other sources", otherOrders)}
+              <div className="label-book">
+                <div className="label-book-nav">
+                  <div
+                    className="label-tabs"
+                    role="tablist"
+                    aria-label="Order sources"
+                  >
+                    <button
+                      role="tab"
+                      aria-selected={labelTab === "tiktok"}
+                      className={labelTab === "tiktok" ? "active" : ""}
+                      onClick={() => setLabelTab("tiktok")}
+                    >
+                      TikTok <span>{tikTokOrders.length}</span>
+                    </button>
+                    <button
+                      role="tab"
+                      aria-selected={labelTab === "other"}
+                      className={labelTab === "other" ? "active" : ""}
+                      onClick={() => setLabelTab("other")}
+                    >
+                      Other sources <span>{otherOrders.length}</span>
+                    </button>
+                  </div>
+                  <button
+                    className="primary"
+                    onClick={() => exportLabels(labelTab)}
+                    disabled={!selectedVisibleLabels}
+                  >
+                    Export {labelTab === "tiktok" ? "TikTok" : "Other sources"}{" "}
+                    CSV
+                    {selectedVisibleLabels ? ` (${selectedVisibleLabels})` : ""}
+                  </button>
+                </div>
+                <div className="label-page" role="tabpanel">
+                  {renderOrderTable(
+                    labelTab === "tiktok"
+                      ? "TikTok orders"
+                      : "Other source orders",
+                    visibleLabelOrders,
+                  ) || (
+                    <div className="labels-empty compact">
+                      <h2>
+                        No {labelTab === "tiktok" ? "TikTok" : "other source"}{" "}
+                        orders
+                      </h2>
+                      <p>
+                        No eligible orders from this source were found for the
+                        selected date.
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </section>

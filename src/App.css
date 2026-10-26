@@ -650,7 +650,36 @@ button:disabled {
   margin: 7px 0 0;
 }
 .labels-table table {
-  min-width: 760px;
+  min-width: 1420px;
+}
+.labels-table {
+  max-height: 540px;
+  overflow: scroll;
+  scrollbar-color: #789889 #e5ebe7;
+  scrollbar-width: auto;
+}
+.labels-table::-webkit-scrollbar {
+  width: 13px;
+  height: 13px;
+}
+.labels-table::-webkit-scrollbar-track {
+  border-radius: 8px;
+  background: #e5ebe7;
+}
+.labels-table::-webkit-scrollbar-thumb {
+  border: 3px solid #e5ebe7;
+  border-radius: 8px;
+  background: #789889;
+}
+.labels-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.labels-table td {
+  max-width: 250px;
+  white-space: normal;
+  line-height: 1.4;
 }
 .labels-table th:first-child,
 .labels-table td:first-child {
@@ -660,11 +689,85 @@ button:disabled {
 .labels-table input[type="checkbox"] {
   accent-color: var(--green);
 }
+.order-status {
+  display: inline-flex;
+  padding: 5px 8px;
+  border-radius: 14px;
+  color: #3c5c4e;
+  background: #e9f0ec;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+.order-total {
+  font-weight: 700;
+  white-space: nowrap !important;
+}
 .label-groups {
   display: grid;
   gap: 18px;
   padding: 18px;
   background: #f7f9f6;
+}
+.label-book {
+  padding: 18px;
+  background: #f7f9f6;
+}
+.label-book-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.label-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #e9eeea;
+}
+.label-tabs button {
+  border: 0;
+  border-radius: 7px;
+  padding: 9px 14px;
+  color: #66766e;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 700;
+}
+.label-tabs button.active {
+  color: #163c2e;
+  background: white;
+  box-shadow: 0 1px 4px #23392f20;
+}
+.label-tabs span {
+  display: inline-grid;
+  min-width: 20px;
+  height: 20px;
+  margin-left: 6px;
+  padding: 0 5px;
+  place-items: center;
+  border-radius: 10px;
+  color: #416354;
+  background: #e4ede7;
+  font-size: 9px;
+}
+.label-page {
+  min-height: 265px;
+  border: 1px solid var(--line);
+  border-radius: 0 10px 10px 10px;
+  background: white;
+  box-shadow: 0 4px 12px #273c3208;
+}
+.label-page .label-group {
+  border: 0;
+  border-radius: inherit;
+}
+.labels-empty.compact {
+  padding: 75px 20px;
 }
 .label-group {
   overflow: hidden;
