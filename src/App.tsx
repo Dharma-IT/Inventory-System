@@ -138,6 +138,7 @@ function App() {
   const [orders, setOrders] = useState<ShopifyOrder[]>([]);
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [ordersLoading, setOrdersLoading] = useState(false);
+  const [labelsExporting, setLabelsExporting] = useState(false);
   const [ordersError, setOrdersError] = useState("");
   const [labelTab, setLabelTab] = useState<"tiktok" | "other">("tiktok");
   const [orderDate, setOrderDate] = useState(() =>
@@ -350,16 +351,52 @@ function App() {
     }
   }
 
-  function exportLabels(source: "tiktok" | "other") {
+  async function exportLabels(source: "tiktok" | "other") {
     setOrdersError("");
+    const inventoryName = source === "tiktok" ? "Label Pack" : "Label Roll";
+    const inventorySku = source === "tiktok" ? "LAB-002" : "LAB-001";
     try {
       const groupOrders = orders.filter((order) =>
         source === "tiktok"
           ? order.sourceName.toLowerCase().includes("tiktok")
           : !order.sourceName.toLowerCase().includes("tiktok"),
       );
+      const exportedOrders = groupOrders.filter((order) =>
+        selectedOrders.has(order.id),
+      );
+      if (!exportedOrders.length) return;
+
+      const labelProduct = products.find(
+        (product) =>
+          product.sku === inventorySku || product.name === inventoryName,
+      );
+      if (!labelProduct) {
+        throw new Error(`${inventoryName} was not found in inventory.`);
+      }
+
+      setLabelsExporting(true);
+      const saved = await database.recordMovement({
+        date: new Intl.DateTimeFormat("en-CA", {
+          timeZone: "America/New_York",
+        }).format(new Date()),
+        product_id: labelProduct.id,
+        type: "Shipment",
+        quantity: exportedOrders.length,
+        note: `${source === "tiktok" ? "TikTok" : "Other sources"} label export (${exportedOrders.length} orders)`,
+      });
+      setProducts((current) =>
+        current.map((product) =>
+          product.id === labelProduct.id
+            ? { ...product, shipped: product.shipped + exportedOrders.length }
+            : product,
+        ),
+      );
+      setMovements((current) => [
+        { ...saved, productId: saved.product_id },
+        ...current,
+      ]);
       downloadUspsCsv(
-        groupOrders.filter((order) => selectedOrders.has(order.id)),
+        exportedOrders,
         orderDate,
         source === "tiktok" ? "TikTok" : "Other-Sources",
       );
@@ -369,6 +406,8 @@ function App() {
           ? error.message
           : "Unable to create the USPS CSV.",
       );
+    } finally {
+      setLabelsExporting(false);
     }
   }
 
@@ -910,10 +949,11 @@ function App() {
                   </div>
                   <button
                     className="primary"
-                    onClick={() => exportLabels(labelTab)}
-                    disabled={!selectedVisibleLabels}
+                    onClick={() => void exportLabels(labelTab)}
+                    disabled={!selectedVisibleLabels || labelsExporting}
                   >
-                    Export {labelTab === "tiktok" ? "TikTok" : "Other sources"}{" "}
+                    {labelsExporting ? "Exporting" : "Export"}{" "}
+                    {labelTab === "tiktok" ? "TikTok" : "Other sources"}{" "}
                     CSV
                     {selectedVisibleLabels ? ` (${selectedVisibleLabels})` : ""}
                   </button>

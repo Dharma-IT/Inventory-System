@@ -56,11 +56,10 @@ begin
   update public.products
   set received = received + case when p_type = 'Receipt' then p_quantity else 0 end,
       shipped = shipped + case when p_type = 'Shipment' then p_quantity else 0 end
-  where id = p_product_id
-    and (p_type <> 'Shipment' or opening + received - shipped >= p_quantity);
+  where id = p_product_id;
 
   if not found then
-    raise exception 'Product not found or insufficient stock';
+    raise exception 'Product not found';
   end if;
 
   insert into public.movements (product_id, type, quantity, date, note)
