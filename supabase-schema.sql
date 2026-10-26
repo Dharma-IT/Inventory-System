@@ -48,19 +48,30 @@ set search_path = public
 as $$
 declare
   saved public.movements;
+  available integer;
 begin
   if p_quantity <= 0 or p_type not in ('Receipt', 'Shipment') then
     raise exception 'Invalid movement';
+  end if;
+
+  select opening + received - shipped
+  into available
+  from public.products
+  where id = p_product_id
+  for update;
+
+  if not found then
+    raise exception 'Product not found';
+  end if;
+
+  if p_type = 'Shipment' and p_quantity > available then
+    raise exception 'Insufficient stock: % available, % requested', available, p_quantity;
   end if;
 
   update public.products
   set received = received + case when p_type = 'Receipt' then p_quantity else 0 end,
       shipped = shipped + case when p_type = 'Shipment' then p_quantity else 0 end
   where id = p_product_id;
-
-  if not found then
-    raise exception 'Product not found';
-  end if;
 
   insert into public.movements (product_id, type, quantity, date, note)
   values (p_product_id, p_type, p_quantity, p_date, coalesce(p_note, ''))

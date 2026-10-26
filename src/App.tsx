@@ -374,6 +374,13 @@ function App() {
         throw new Error(`${inventoryName} was not found in inventory.`);
       }
 
+      const availableLabels = stock(labelProduct);
+      if (exportedOrders.length > availableLabels) {
+        throw new Error(
+          `Only ${fmt.format(availableLabels)} ${inventoryName} labels are in stock, but ${fmt.format(exportedOrders.length)} were selected.`,
+        );
+      }
+
       setLabelsExporting(true);
       const saved = await database.recordMovement({
         date: new Intl.DateTimeFormat("en-CA", {
