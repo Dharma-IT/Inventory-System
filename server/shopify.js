@@ -43,21 +43,16 @@ export async function getOrders({
 } = {}) {
   // Intentionally exchange credentials for a new token on every orders fetch.
   const accessToken = await getFreshAccessToken();
-  const nodes = [];
-  let cursor = after;
-  let pageInfo = { hasNextPage: false, endCursor: null };
-
-  do {
-    const response = await fetch(
-      `https://${storeDomain}/admin/api/${apiVersion}/graphql.json`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Shopify-Access-Token": accessToken,
-        },
-        body: JSON.stringify({
-          query: `
+  const response = await fetch(
+    `https://${storeDomain}/admin/api/${apiVersion}/graphql.json`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": accessToken,
+      },
+      body: JSON.stringify({
+        query: `
         query Orders($first: Int!, $after: String, $query: String) {
           orders(first: $first, after: $after, query: $query, sortKey: CREATED_AT, reverse: true) {
             nodes {
@@ -84,26 +79,21 @@ export async function getOrders({
           }
         }
       `,
-          variables: {
-            first,
-            after: cursor,
-            query:
-              from && to ? `created_at:>='${from}' created_at:<'${to}'` : null,
-          },
-        }),
-      },
-    );
+        variables: {
+          first,
+          after,
+          query:
+            from && to ? `created_at:>='${from}' created_at:<'${to}'` : null,
+        },
+      }),
+    },
+  );
 
-    if (!response.ok)
-      throw new Error(`Shopify orders request failed (${response.status}).`);
-    const result = await response.json();
-    if (result.errors?.length) {
-      throw new Error(result.errors.map((error) => error.message).join("; "));
-    }
-    nodes.push(...result.data.orders.nodes);
-    pageInfo = result.data.orders.pageInfo;
-    cursor = pageInfo.endCursor;
-  } while (pageInfo.hasNextPage);
-
-  return { nodes, pageInfo };
+  if (!response.ok)
+    throw new Error(`Shopify orders request failed (${response.status}).`);
+  const result = await response.json();
+  if (result.errors?.length) {
+    throw new Error(result.errors.map((error) => error.message).join("; "));
+  }
+  return result.data.orders;
 }

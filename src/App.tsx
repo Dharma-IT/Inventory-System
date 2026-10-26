@@ -146,6 +146,7 @@ function App() {
     }).format(new Date()),
   );
   const [loadStage, setLoadStage] = useState("");
+  const [loadEta, setLoadEta] = useState("");
   const [loadProgress, setLoadProgress] = useState(0);
   const [loadSeconds, setLoadSeconds] = useState(0);
   const [query, setQuery] = useState("");
@@ -276,11 +277,38 @@ function App() {
     setOrdersError("");
     setLoadSeconds(0);
     setLoadProgress(18);
-    setLoadStage("Fetching orders from Shopify");
+    setLoadStage("Fetching orders 1–100 from Shopify");
+    setLoadEta("Estimating remaining time");
     const started = performance.now();
     try {
-      const result = await fetchOrders(100, undefined, orderDate);
-      const eligible = result.nodes.filter((order) =>
+      const fetchedOrders: ShopifyOrder[] = [];
+      let cursor: string | undefined;
+      let page = 0;
+      let hasNextPage = true;
+      while (hasNextPage) {
+        const pageStarted = performance.now();
+        const result = await fetchOrders(100, cursor, orderDate);
+        fetchedOrders.push(...result.nodes);
+        page += 1;
+        hasNextPage = result.pageInfo.hasNextPage;
+        cursor = result.pageInfo.endCursor || undefined;
+        const pageSeconds = Math.max(
+          0.1,
+          (performance.now() - pageStarted) / 1000,
+        );
+        setLoadProgress(Math.min(68, 18 + page * 12));
+        setLoadStage(
+          hasNextPage
+            ? `Fetched ${fetchedOrders.length} orders · loading ${fetchedOrders.length + 1}–${fetchedOrders.length + 100}`
+            : `Fetched all ${fetchedOrders.length} orders`,
+        );
+        setLoadEta(
+          hasNextPage
+            ? `Next batch: about ${pageSeconds.toFixed(1)}s`
+            : "All order batches loaded",
+        );
+      }
+      const eligible = fetchedOrders.filter((order) =>
         order.lineItems.nodes.some((item) => {
           const name = item.name.toLowerCase().replace(/[^a-z0-9]/g, "");
           return (
@@ -292,6 +320,7 @@ function App() {
       );
       setLoadProgress(72);
       setLoadStage("Automating USPS labels");
+      setLoadEta("Less than 1 second remaining");
       await new Promise((resolve) => window.setTimeout(resolve, 350));
       setOrders(eligible);
       setSelectedOrders(
@@ -305,6 +334,7 @@ function App() {
       setLoadStage(
         `Ready — ${eligible.length} eligible order${eligible.length === 1 ? "" : "s"}`,
       );
+      setLoadEta("");
       setLoadSeconds((performance.now() - started) / 1000);
     } catch (error) {
       setOrdersError(
@@ -819,7 +849,7 @@ function App() {
                   <strong>{loadStage}</strong>
                   <span>
                     {ordersLoading
-                      ? `${loadSeconds.toFixed(1)}s elapsed · usually under 15s`
+                      ? `${loadSeconds.toFixed(1)}s elapsed${loadEta ? ` · ${loadEta}` : ""}`
                       : `Completed in ${loadSeconds.toFixed(1)}s`}
                   </span>
                 </div>
