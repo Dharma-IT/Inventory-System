@@ -83,7 +83,9 @@ export async function getOrders({
           first,
           after,
           query:
-            from && to ? `created_at:>='${from}' created_at:<'${to}'` : null,
+            from && to
+              ? `created_at:>='${from}' created_at:<'${to}' financial_status:paid`
+              : "financial_status:paid",
         },
       }),
     },

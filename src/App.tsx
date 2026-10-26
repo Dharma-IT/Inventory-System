@@ -309,15 +309,17 @@ function App() {
             : "All order batches loaded",
         );
       }
-      const eligible = fetchedOrders.filter((order) =>
-        order.lineItems.nodes.some((item) => {
-          const name = item.name.toLowerCase().replace(/[^a-z0-9]/g, "");
-          return (
-            name.includes("berberine") ||
-            name.includes("detoxtea") ||
-            name.includes("slimboost")
-          );
-        }),
+      const eligible = fetchedOrders.filter(
+        (order) =>
+          order.displayFinancialStatus === "PAID" &&
+          order.lineItems.nodes.some((item) => {
+            const name = item.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+            return (
+              name.includes("berberine") ||
+              name.includes("detoxtea") ||
+              name.includes("slimboost")
+            );
+          }),
       );
       setLoadProgress(72);
       setLoadStage("Automating USPS labels");
