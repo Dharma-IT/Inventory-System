@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import "./App.css";
 import { database } from "./supabase";
+import { fetchOrders } from "./ordersApi";
+import type { ShopifyOrder } from "./ordersApi";
+import { downloadUspsCsv } from "./uspsLabels";
 
 type Product = {
   id: string;
@@ -135,6 +138,18 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [databaseError, setDatabaseError] = useState("");
+  const [orders, setOrders] = useState<ShopifyOrder[]>([]);
+  const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [ordersError, setOrdersError] = useState("");
+  const [orderDate, setOrderDate] = useState(() =>
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/New_York",
+    }).format(new Date()),
+  );
+  const [loadStage, setLoadStage] = useState("");
+  const [loadProgress, setLoadProgress] = useState(0);
+  const [loadSeconds, setLoadSeconds] = useState(0);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"All" | "Healthy" | "Low" | "Restock">(
     "All",
@@ -144,7 +159,9 @@ function App() {
   );
   const [saleProductId, setSaleProductId] = useState("");
   const [editing, setEditing] = useState<Product | null>(null);
-  const [view, setView] = useState<"inventory" | "activity">("inventory");
+  const [view, setView] = useState<"inventory" | "labels" | "activity">(
+    "inventory",
+  );
 
   useEffect(() => {
     async function loadInventory() {
@@ -175,6 +192,16 @@ function App() {
     }
     void loadInventory();
   }, []);
+
+  useEffect(() => {
+    if (!ordersLoading) return;
+    const started = Date.now();
+    const timer = window.setInterval(
+      () => setLoadSeconds((Date.now() - started) / 1000),
+      100,
+    );
+    return () => window.clearInterval(timer);
+  }, [ordersLoading]);
   const visible = useMemo(
     () =>
       products.filter(
@@ -250,6 +277,181 @@ function App() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function loadOrders() {
+    setOrdersLoading(true);
+    setOrdersError("");
+    setLoadSeconds(0);
+    setLoadProgress(18);
+    setLoadStage("Fetching orders from Shopify");
+    const started = performance.now();
+    try {
+      const result = await fetchOrders(100, undefined, orderDate);
+      const eligible = result.nodes.filter((order) =>
+        order.lineItems.nodes.some((item) => {
+          const name = item.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+          return (
+            name.includes("berberine") ||
+            name.includes("detoxtea") ||
+            name.includes("slimboost")
+          );
+        }),
+      );
+      setLoadProgress(72);
+      setLoadStage("Automating USPS labels");
+      await new Promise((resolve) => window.setTimeout(resolve, 350));
+      setOrders(eligible);
+      setSelectedOrders(
+        new Set(
+          eligible
+            .filter((order) => order.shippingAddress)
+            .map((order) => order.id),
+        ),
+      );
+      setLoadProgress(100);
+      setLoadStage(
+        `Ready — ${eligible.length} eligible order${eligible.length === 1 ? "" : "s"}`,
+      );
+      setLoadSeconds((performance.now() - started) / 1000);
+    } catch (error) {
+      setOrdersError(
+        error instanceof Error
+          ? error.message
+          : "Unable to retrieve Shopify orders.",
+      );
+    } finally {
+      setOrdersLoading(false);
+    }
+  }
+
+  function exportLabels() {
+    setOrdersError("");
+    try {
+      downloadUspsCsv(
+        orders.filter((order) => selectedOrders.has(order.id)),
+        orderDate,
+      );
+    } catch (error) {
+      setOrdersError(
+        error instanceof Error
+          ? error.message
+          : "Unable to create the USPS CSV.",
+      );
+    }
+  }
+
+  const tikTokOrders = orders.filter((order) =>
+    order.sourceName.toLowerCase().includes("tiktok"),
+  );
+  const otherOrders = orders.filter(
+    (order) => !order.sourceName.toLowerCase().includes("tiktok"),
+  );
+
+  function renderOrderTable(title: string, groupOrders: ShopifyOrder[]) {
+    if (!groupOrders.length) return null;
+    const selectedInGroup = groupOrders.filter((order) =>
+      selectedOrders.has(order.id),
+    ).length;
+    return (
+      <div className="label-group">
+        <div className="label-group-title">
+          <h3>{title}</h3>
+          <span>{groupOrders.length} orders</span>
+        </div>
+        <div className="table-wrap labels-table">
+          <table>
+            <thead>
+              <tr>
+                <th>
+                  <input
+                    aria-label={`Select all ${title} orders`}
+                    type="checkbox"
+                    checked={selectedInGroup === groupOrders.length}
+                    onChange={(event) =>
+                      setSelectedOrders((current) => {
+                        const next = new Set(current);
+                        groupOrders.forEach((order) => {
+                          if (!order.shippingAddress) return;
+                          if (event.target.checked) next.add(order.id);
+                          else next.delete(order.id);
+                        });
+                        return next;
+                      })
+                    }
+                  />
+                </th>
+                <th>Order</th>
+                <th>Date</th>
+                <th>Recipient</th>
+                <th>Ship to</th>
+                <th>Products</th>
+              </tr>
+            </thead>
+            <tbody>
+              {groupOrders.map((order) => {
+                const address = order.shippingAddress;
+                const matchingItems = order.lineItems.nodes.filter((item) => {
+                  const name = item.name
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]/g, "");
+                  return (
+                    name.includes("berberine") ||
+                    name.includes("detoxtea") ||
+                    name.includes("slimboost")
+                  );
+                });
+                return (
+                  <tr key={order.id}>
+                    <td>
+                      <input
+                        aria-label={`Select ${order.name}`}
+                        type="checkbox"
+                        checked={selectedOrders.has(order.id)}
+                        disabled={!address}
+                        onChange={(event) =>
+                          setSelectedOrders((current) => {
+                            const next = new Set(current);
+                            if (event.target.checked) next.add(order.id);
+                            else next.delete(order.id);
+                            return next;
+                          })
+                        }
+                      />
+                    </td>
+                    <td>
+                      <strong>{order.name}</strong>
+                      <small className="block">{order.sourceName}</small>
+                    </td>
+                    <td>
+                      {new Date(order.createdAt).toLocaleTimeString("en-US", {
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </td>
+                    <td>
+                      {address
+                        ? `${address.firstName || ""} ${address.lastName || ""}`.trim()
+                        : "Missing address"}
+                    </td>
+                    <td>
+                      {address
+                        ? `${address.city || ""}, ${address.provinceCode || ""} ${address.zip || ""}`
+                        : "—"}
+                    </td>
+                    <td>
+                      {matchingItems
+                        .map((item) => `${item.name} × ${item.quantity}`)
+                        .join(", ")}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
   }
   async function saveMovement(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -341,6 +543,12 @@ function App() {
             <span>▦</span> Inventory
           </button>
           <button
+            className={view === "labels" ? "active" : ""}
+            onClick={() => setView("labels")}
+          >
+            <span>▤</span> Labels
+          </button>
+          <button
             className={view === "activity" ? "active" : ""}
             onClick={() => setView("activity")}
           >
@@ -371,37 +579,48 @@ function App() {
           <div>
             <p className="eyebrow">OPERATIONS / {view.toUpperCase()}</p>
             <h1>
-              {view === "inventory" ? "Inventory overview" : "Stock activity"}
+              {view === "inventory"
+                ? "Inventory overview"
+                : view === "labels"
+                  ? "Labels"
+                  : "Stock activity"}
             </h1>
             <p>
               {view === "inventory"
                 ? "Know what is available and what needs action."
-                : "Every receipt and shipment in one place."}
+                : view === "labels"
+                  ? "Create and manage product labels."
+                  : "Every receipt and shipment in one place."}
             </p>
           </div>
-          <div className="actions">
-            <button className="secondary" onClick={() => setModal("movement")}>
-              ↕ Record movement
-            </button>
-            <button
-              className="secondary"
-              onClick={() => {
-                setEditing(null);
-                setModal("product");
-              }}
-            >
-              ＋ Add product
-            </button>
-            <button
-              className="primary sale-button"
-              onClick={() => {
-                setSaleProductId(products[0]?.id || "");
-                setModal("sale");
-              }}
-            >
-              − Record sale
-            </button>
-          </div>
+          {view !== "labels" && (
+            <div className="actions">
+              <button
+                className="secondary"
+                onClick={() => setModal("movement")}
+              >
+                ↕ Record movement
+              </button>
+              <button
+                className="secondary"
+                onClick={() => {
+                  setEditing(null);
+                  setModal("product");
+                }}
+              >
+                ＋ Add product
+              </button>
+              <button
+                className="primary sale-button"
+                onClick={() => {
+                  setSaleProductId(products[0]?.id || "");
+                  setModal("sale");
+                }}
+              >
+                − Record sale
+              </button>
+            </div>
+          )}
         </header>
         {view === "inventory" ? (
           <>
@@ -533,6 +752,81 @@ function App() {
               </footer>
             </section>
           </>
+        ) : view === "labels" ? (
+          <section className="panel labels-panel">
+            <div className="labels-head">
+              <div>
+                <h2>USPS shipping labels</h2>
+                <p>Berberine, Detox Tea, and Slim Boost orders only.</p>
+              </div>
+              <div className="label-controls">
+                <label>
+                  Order date
+                  <input
+                    type="date"
+                    value={orderDate}
+                    max={new Intl.DateTimeFormat("en-CA", {
+                      timeZone: "America/New_York",
+                    }).format(new Date())}
+                    onChange={(event) => setOrderDate(event.target.value)}
+                  />
+                </label>
+                <button
+                  className="secondary"
+                  onClick={() => void loadOrders()}
+                  disabled={ordersLoading}
+                >
+                  {ordersLoading ? "Working…" : "Fetch orders"}
+                </button>
+                <button
+                  className="primary"
+                  onClick={exportLabels}
+                  disabled={!selectedOrders.size}
+                >
+                  Export {selectedOrders.size || ""} label
+                  {selectedOrders.size === 1 ? "" : "s"}
+                </button>
+              </div>
+            </div>
+            {ordersError && <div className="labels-error">{ordersError}</div>}
+            {(ordersLoading || loadProgress > 0) && (
+              <div className="label-progress-wrap" aria-live="polite">
+                <div className="label-progress-copy">
+                  <strong>{loadStage}</strong>
+                  <span>
+                    {ordersLoading
+                      ? `${loadSeconds.toFixed(1)}s elapsed · usually under 15s`
+                      : `Completed in ${loadSeconds.toFixed(1)}s`}
+                  </span>
+                </div>
+                <div
+                  className="label-progress"
+                  role="progressbar"
+                  aria-valuenow={loadProgress}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                >
+                  <i style={{ width: `${loadProgress}%` }} />
+                </div>
+              </div>
+            )}
+            {!orders.length && !ordersLoading ? (
+              <div className="labels-empty">
+                <span>▤</span>
+                <h2>No orders loaded</h2>
+                <p>
+                  {loadProgress === 100
+                    ? "No Berberine, Detox Tea, or Slim Boost orders were found for this date."
+                    : "Choose a date and fetch eligible Shopify orders."}
+                </p>
+              </div>
+            ) : (
+              <div className="label-groups">
+                {renderOrderTable("TikTok", tikTokOrders)}
+                {renderOrderTable("Other sources", otherOrders)}
+              </div>
+            )}
+          </section>
         ) : (
           <section className="panel activity-panel">
             <div className="activity-head">
