@@ -116,7 +116,23 @@ const movements = movementRows.map((row) => {
     quantity: number(row[3]), note: translateNote(row[4].trim()),
   };
 });
-if (movements.length !== 42) throw new Error(`Expected 42 movements, found ${movements.length}.`);
+if (!movements.length) throw new Error("No movements were found in the CSV.");
+
+const sourceTotals = new Map();
+for (const movement of movements) {
+  const values = sourceTotals.get(movement.product_id) || { received: 0, shipped: 0 };
+  values[movement.type === "Receipt" ? "received" : "shipped"] += movement.quantity;
+  sourceTotals.set(movement.product_id, values);
+}
+for (const product of products) {
+  const values = sourceTotals.get(product.id) || { received: 0, shipped: 0 };
+  if (values.received !== product.received || values.shipped !== product.shipped) {
+    throw new Error(
+      `Source movement totals do not reconcile for ${product.id}: ` +
+      `summary ${product.received}/${product.shipped}, movements ${values.received}/${values.shipped}.`,
+    );
+  }
+}
 
 await api("products?on_conflict=id", {
   method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify(products),
