@@ -132,6 +132,16 @@ const fmt = new Intl.NumberFormat("en-US");
 function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
+  const [movementSort, setMovementSort] = useState<"Date" | Movement["type"]>("Date");
+  const sortedMovements = useMemo(
+    () => [...movements].sort((a, b) => {
+      if (movementSort !== "Date" && a.type !== b.type) {
+        return a.type === movementSort ? -1 : 1;
+      }
+      return b.date.localeCompare(a.date);
+    }),
+    [movements, movementSort],
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [databaseError, setDatabaseError] = useState("");
@@ -992,9 +1002,22 @@ function App() {
             <div className="activity-head">
               <div>
                 <h2>Movement log</h2>
-                <p>Newest transactions appear first.</p>
+                <p>{movementSort === "Date"
+                  ? "Newest transactions appear first."
+                  : `${movementSort}s appear first, newest date first within each type.`}</p>
               </div>
               <div className="actions">
+                <label className="movement-sort">
+                  Sort by
+                  <select
+                    value={movementSort}
+                    onChange={(event) => setMovementSort(event.target.value as "Date" | Movement["type"])}
+                  >
+                    <option value="Date">Date (newest first)</option>
+                    <option value="Receipt">Receipt first</option>
+                    <option value="Shipment">Shipment first</option>
+                  </select>
+                </label>
                 <button
                   className="secondary"
                   onClick={() => setModal("movement")}
@@ -1025,7 +1048,7 @@ function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {movements.map((m) => {
+                  {sortedMovements.map((m) => {
                     const p = products.find((x) => x.id === m.productId);
                     return (
                       <tr key={m.id}>
