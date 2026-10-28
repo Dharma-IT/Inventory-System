@@ -323,6 +323,7 @@ function App() {
       const eligible = fetchedOrders.filter(
         (order) =>
           order.displayFinancialStatus === "PAID" &&
+          order.displayFulfillmentStatus !== "FULFILLED" &&
           order.lineItems.nodes.some((item) => {
             const name = item.name.toLowerCase().replace(/[^a-z0-9]/g, "");
             return (
