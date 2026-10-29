@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import "./App.css";
-import { database } from "./supabase";
+import { database, supabase } from "./supabase";
+import type { Session } from "@supabase/supabase-js";
 import { fetchOrders } from "./ordersApi";
 import type { ShopifyOrder } from "./ordersApi";
 import { downloadUspsCsv } from "./uspsLabels";
@@ -129,7 +130,21 @@ const suggestedOrder = (p: Product) =>
 const status = (p: Product) => (stock(p) < minimum(p) ? "Restock" : "Healthy");
 const fmt = new Intl.NumberFormat("en-US");
 
-function App() {
+function App({ session }: { session: Session }) {
+  const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState("");
+  async function signOut() {
+    setSigningOut(true);
+    setSignOutError("");
+    try {
+      const result = await supabase!.auth.signOut({ scope: "local" });
+      if (result.error) throw result.error;
+    } catch {
+      setSignOutError("Unable to sign out. Please try again.");
+    } finally {
+      setSigningOut(false);
+    }
+  }
   const [products, setProducts] = useState<Product[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
   const [movementSort, setMovementSort] = useState<"Date" | Movement["type"]>("Date");
@@ -683,12 +698,14 @@ function App() {
           <p>Thresholds update instantly when usage or lead time changes.</p>
         </div>
         <div className="user">
-          <div>JD</div>
+          <div>{session.user.email?.slice(0, 2).toUpperCase() || "IN"}</div>
           <p>
-            <strong>Inventory team</strong>
+            <strong className="user-email" title={session.user.email}>{session.user.email}</strong>
             <span>Operations</span>
           </p>
         </div>
+        <button className="sign-out" onClick={signOut} disabled={signingOut}>{signingOut ? "Signing out…" : "Sign out"}</button>
+        {signOutError && <p role="alert">{signOutError}</p>}
       </aside>
       <main>
         {databaseError && (

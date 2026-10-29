@@ -1,3 +1,5 @@
+import { createClient } from "@supabase/supabase-js";
+
 export type ProductRecord = {
   id: string;
   name: string;
@@ -20,6 +22,15 @@ export type MovementRecord = {
 
 const url = import.meta.env.VITE_SUPABASE_URL?.replace(/\/$/, "");
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+export const supabase = url && key ? createClient(url, key) : null;
+
+export async function authHeaders() {
+  if (!supabase) throw new Error("Supabase environment variables are missing.");
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  if (!data.session) throw new Error("Please sign in to continue.");
+  return { Authorization: `Bearer ${data.session.access_token}` };
+}
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!url || !key)
@@ -28,7 +39,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     ...init,
     headers: {
       apikey: key,
-      Authorization: `Bearer ${key}`,
+      ...await authHeaders(),
       "Content-Type": "application/json",
       ...init.headers,
     },

@@ -29,11 +29,11 @@ drop policy if exists "inventory products are editable" on public.products;
 drop policy if exists "inventory movements are readable" on public.movements;
 drop policy if exists "inventory movements are insertable" on public.movements;
 
-create policy "inventory products are readable" on public.products for select to anon using (true);
-create policy "inventory products are insertable" on public.products for insert to anon with check (true);
-create policy "inventory products are editable" on public.products for update to anon using (true) with check (true);
-create policy "inventory movements are readable" on public.movements for select to anon using (true);
-create policy "inventory movements are insertable" on public.movements for insert to anon with check (true);
+create policy "inventory products are readable" on public.products for select to authenticated using (true);
+create policy "inventory products are insertable" on public.products for insert to authenticated with check (true);
+create policy "inventory products are editable" on public.products for update to authenticated using (true) with check (true);
+create policy "inventory movements are readable" on public.movements for select to authenticated using (true);
+create policy "inventory movements are insertable" on public.movements for insert to authenticated with check (true);
 
 create or replace function public.record_movement(
   p_product_id text,
@@ -80,4 +80,6 @@ begin
 end;
 $$;
 
-grant execute on function public.record_movement(text, text, integer, date, text) to anon;
+revoke execute on function public.record_movement(text, text, integer, date, text) from public, anon;
+
+grant execute on function public.record_movement(text, text, integer, date, text) to authenticated;

@@ -1,3 +1,4 @@
+import { authHeaders } from "./supabase";
 const apiUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, "");
 
 function storeOffset(date: string) {
@@ -48,7 +49,7 @@ export async function fetchOrders(first = 100, after?: string, date?: string) {
     query.set("to", `${nextDate}T00:00:00${storeOffset(nextDate)}`);
   }
 
-  const response = await fetch(`${apiUrl}/api/orders?${query}`);
+  const response = await fetch(`${apiUrl}/api/orders?${query}`, { headers: await authHeaders() });
   if (!response.ok) throw new Error("Unable to retrieve Shopify orders.");
   return response.json() as Promise<{
     nodes: ShopifyOrder[];

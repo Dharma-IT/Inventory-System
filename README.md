@@ -7,6 +7,22 @@ first run, open the project's Supabase SQL Editor and run
 [`supabase-schema.sql`](./supabase-schema.sql). This creates the tables, browser
 policies, and the atomic `record_movement` function used by receipts and sales.
 
+## Sign-in and access
+
+The app uses native Supabase email/password authentication with persistent sessions,
+automatic token refresh, and sign-out. Inventory is mounted only after sign-in;
+database and order requests carry the user's access token.
+
+1. Run `supabase-schema.sql` in Supabase SQL Editor, including for an existing
+   installation. It replaces anonymous inventory policies with authenticated
+   policies and restricts the stock movement function to signed-in users.
+2. Enable Email under Authentication ? Sign In / Providers. Create team accounts
+   under Authentication ? Users ? Add user (existing accounts work).
+3. Disable public sign-ups in Supabase for this internal workspace. All authenticated
+   accounts in this project can read and update shared inventory and retrieve orders.
+4. Configure `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` on the API server,
+   using the same project as the frontend. Restart/redeploy both services.
+
 Copy `.env.example` to `.env.local` and set the project URL and publishable key.
 The secret key is server-only and is never included in the browser bundle.
 

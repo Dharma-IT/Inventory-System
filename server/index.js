@@ -1,5 +1,12 @@
 import { createServer } from "node:http";
 import { getOrders } from "./shopify.js";
+import { createClient } from "@supabase/supabase-js";
+
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const auth = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey, {
+  auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+}) : null;
 
 const port = Number(process.env.PORT || 10000);
 const allowedOrigin = process.env.CORS_ORIGIN || "http://localhost:5173";
@@ -9,7 +16,7 @@ function sendJson(response, status, body) {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": allowedOrigin,
     "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
     Vary: "Origin",
   });
   response.end(JSON.stringify(body));
@@ -24,6 +31,15 @@ createServer(async (request, response) => {
   }
 
   if (request.method === "GET" && url.pathname === "/api/orders") {
+    if (!auth) return sendJson(response, 503, { error: "Authentication is not configured." });
+    const token = request.headers.authorization?.match(/^Bearer\s+(\S+)$/i)?.[1];
+    if (!token) return sendJson(response, 401, { error: "Sign in to continue." });
+    try {
+      const { data, error } = await auth.auth.getUser(token);
+      if (error || !data.user) return sendJson(response, 401, { error: "Your session has expired. Please sign in again." });
+    } catch {
+      return sendJson(response, 503, { error: "Unable to verify your session." });
+    }
     try {
       const requestedFirst = Number(url.searchParams.get("first") || 50);
       const first = Math.min(100, Math.max(1, requestedFirst));
