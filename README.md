@@ -7,6 +7,15 @@ first run, open the project's Supabase SQL Editor and run
 [`supabase-schema.sql`](./supabase-schema.sql). This creates the tables, browser
 policies, and the atomic `record_movement` function used by receipts and sales.
 
+## Product display order
+
+For an existing installation, run [`supabase-product-order.sql`](./supabase-product-order.sql)
+in Supabase SQL Editor before deploying this version. New installations can run the
+full schema as usual. The migration preserves the existing creation order, adds an
+atomic reorder function, and sets Label Roll (LAB-001) weekly usage to 350.
+Use **Manage products** in Inventory to choose positions and save the shared order.
+New products appear at the end of the list.
+
 ## Sign-in and access
 
 The app uses native Supabase email/password authentication with persistent sessions,

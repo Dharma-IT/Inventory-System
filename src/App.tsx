@@ -16,6 +16,7 @@ type Product = {
   shipped: number;
   weekly: number;
   lead: number;
+  position: number;
 };
 type Movement = {
   id: string;
@@ -31,7 +32,7 @@ const seedRows: Array<
 > = [
   ["ENV-001", "White Envelopes", 149, 600, 134, 336, 3],
   ["ENV-002", "Green Envelope", 0, 4930, 0, 0, 60],
-  ["LAB-001", "Label Roll", 200, 3000, 17, 67, 7],
+  ["LAB-001", "Label Roll", 200, 3000, 17, 350, 7],
   ["LAB-002", "Label Pack", 750, 0, 61, 269, 3],
   ["GB-001", "Gut Boost", 12, 0, 0, 0, 10],
   ["BB-001", "Beauty Boost", 13, 0, 0, 0, 10],
@@ -68,7 +69,8 @@ const seedRows: Array<
   ["VDK-001", "Vitamin D3/K2", 8, 0, 0, 0, 10],
 ];
 const seedProducts: Product[] = seedRows.map(
-  ([sku, name, opening, received, shipped, weekly, lead]) => ({
+  ([sku, name, opening, received, shipped, weekly, lead], position) => ({
+    position,
     id: sku,
     name,
     sku,
@@ -177,9 +179,11 @@ function App({ session }: { session: Session }) {
   const [loadSeconds, setLoadSeconds] = useState(0);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"All" | "Healthy" | "Restock">("All");
-  const [modal, setModal] = useState<"product" | "movement" | "stock" | null>(
+  const [modal, setModal] = useState<"product" | "movement" | "stock" | "manage" | null>(
     null,
   );
+  const [productOrder, setProductOrder] = useState<Product[]>([]);
+  const [orderError, setOrderError] = useState("");
   const [stockProductId, setStockProductId] = useState("");
   const [stockQuery, setStockQuery] = useState("");
   const [editing, setEditing] = useState<Product | null>(null);
@@ -257,6 +261,7 @@ function App({ session }: { session: Session }) {
       shipped: editing?.shipped || 0,
       weekly: +String(data.get("weekly")),
       lead: +String(data.get("lead")),
+      position: editing?.position ?? Math.max(-1, ...products.map((p) => p.position)) + 1,
     };
     const adjustment = editing ? desiredQuantity - stock(next) : 0;
     setSaving(true);
@@ -286,7 +291,7 @@ function App({ session }: { session: Session }) {
       setProducts(
         editing
           ? products.map((p) => (p.id === editing.id ? next : p))
-          : [next, ...products],
+          : [...products, next],
       );
       setModal(null);
       setEditing(null);
@@ -294,6 +299,31 @@ function App({ session }: { session: Session }) {
       setDatabaseError(
         error instanceof Error ? error.message : "Unable to save product.",
       );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function moveProduct(id: string, destination: number) {
+    setProductOrder((current) => {
+      const next = [...current];
+      const index = next.findIndex((product) => product.id === id);
+      if (index < 0 || destination < 0 || destination >= next.length) return current;
+      const [product] = next.splice(index, 1);
+      next.splice(destination, 0, product);
+      return next;
+    });
+  }
+
+  async function saveProductOrder() {
+    setSaving(true);
+    setOrderError("");
+    try {
+      await database.reorderProducts(productOrder.map((product) => product.id));
+      setProducts(productOrder.map((product, position) => ({ ...product, position })));
+      setModal(null);
+    } catch (error) {
+      setOrderError(error instanceof Error ? error.message : "Unable to save product order.");
     } finally {
       setSaving(false);
     }
@@ -734,6 +764,13 @@ function App({ session }: { session: Session }) {
           </div>
           {view !== "labels" && (
             <div className="actions">
+              {view === "inventory" && (
+                <button className="secondary" disabled={loading || !products.length} onClick={() => {
+                  setProductOrder([...products]);
+                  setOrderError("");
+                  setModal("manage");
+                }}>Manage products</button>
+              )}
               <button
                 className="secondary"
                 onClick={() => setModal("movement")}
@@ -1108,9 +1145,11 @@ function App({ session }: { session: Session }) {
             }
           }}
         >
-          <div className="modal">
+          <div className={`modal${modal === "manage" ? " manage-modal" : ""}`} role="dialog" aria-modal="true" aria-label={modal === "manage" ? "Manage products" : "Inventory form"}>
             <button
               className="close"
+              disabled={saving}
+              aria-label="Close dialog"
               onClick={() => {
                 setModal(null);
                 setEditing(null);
@@ -1118,7 +1157,32 @@ function App({ session }: { session: Session }) {
             >
               ×
             </button>
-            {modal === "product" ? (
+            {modal === "manage" ? (
+              <>
+                <p className="eyebrow">PRODUCT ORDER</p>
+                <h2>Manage products</h2>
+                <p className="modal-copy">Move products up or down, or choose their position. This order is shared across inventory.</p>
+                {orderError && <p role="alert" className="order-error">{orderError}</p>}
+                <ol className="product-order-list">
+                  {productOrder.map((product, index) => (
+                    <li key={product.id}>
+                      <span className="order-product"><strong>{product.name}</strong><small>{product.sku}</small></span>
+                      <label>Position
+                        <select aria-label={`Position for ${product.name}`} value={index} disabled={saving} onChange={(event) => moveProduct(product.id, Number(event.target.value))}>
+                          {productOrder.map((_, position) => <option key={position} value={position}>{position + 1}</option>)}
+                        </select>
+                      </label>
+                      <button className="secondary" aria-label={`Move ${product.name} up`} disabled={saving || index === 0} onClick={() => moveProduct(product.id, index - 1)}>?</button>
+                      <button className="secondary" aria-label={`Move ${product.name} down`} disabled={saving || index === productOrder.length - 1} onClick={() => moveProduct(product.id, index + 1)}>?</button>
+                    </li>
+                  ))}
+                </ol>
+                <div className="manage-actions">
+                  <button className="secondary" disabled={saving} onClick={() => setModal(null)}>Cancel</button>
+                  <button className="primary" disabled={saving} onClick={() => void saveProductOrder()}>{saving ? "Saving?" : "Save order"}</button>
+                </div>
+              </>
+            ) : modal === "product" ? (
               <>
                 <p className="eyebrow">PRODUCT DETAILS</p>
                 <h2>{editing ? "Edit product" : "Add a product"}</h2>

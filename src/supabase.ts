@@ -9,6 +9,7 @@ export type ProductRecord = {
   shipped: number;
   weekly: number;
   lead: number;
+  position: number;
 };
 
 export type MovementRecord = {
@@ -55,8 +56,13 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 export const database = {
   products: () =>
     request<ProductRecord[]>(
-      "products?select=id,name,sku,opening,received,shipped,weekly,lead&order=created_at.asc",
+      "products?select=id,name,sku,opening,received,shipped,weekly,lead,position&order=position.asc,created_at.asc,id.asc",
     ),
+  reorderProducts: (ids: string[]) =>
+    request<void>("rpc/reorder_products", {
+      method: "POST",
+      body: JSON.stringify({ p_ids: ids }),
+    }),
   movements: () =>
     request<MovementRecord[]>(
       "movements?select=id,date,product_id,type,quantity,note&order=created_at.desc",

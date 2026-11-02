@@ -892,3 +892,31 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+.manage-modal {
+  width: min(700px, 100%);
+  max-height: calc(100dvh - 40px);
+  display: flex;
+  flex-direction: column;
+}
+.product-order-list {
+  overflow-y: auto;
+  padding: 0;
+  margin: 20px 0;
+  list-style: none;
+}
+.product-order-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e5ebe7;
+}
+.order-product { flex: 1; min-width: 0; }
+.order-product strong, .order-product small { display: block; }
+.order-product small { margin-top: 4px; }
+.product-order-list label { width: 72px; flex-shrink: 0; }
+.product-order-list button { padding: 9px 12px; }
+.manage-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.order-error { color: #a32922; font-size: 13px; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
