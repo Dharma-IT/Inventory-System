@@ -32,4 +32,4 @@ $$;
 revoke execute on function public.reorder_products(text[]) from public, anon;
 grant execute on function public.reorder_products(text[]) to authenticated;
 
-update public.products set weekly = 350 where sku = 'LAB-001';
+update public.products set weekly = 3500 where sku = 'LAB-001';

@@ -20,7 +20,7 @@ available stock negative. Failed deletions leave both the log and stock unchange
 For an existing installation, run [`supabase-product-order.sql`](./supabase-product-order.sql)
 in Supabase SQL Editor before deploying this version. New installations can run the
 full schema as usual. The migration preserves the existing creation order, adds an
-atomic reorder function, and sets Label Roll (LAB-001) weekly usage to 350.
+atomic reorder function, and sets Label Roll (LAB-001) weekly usage to 3,500.
 Use **Manage products** in Inventory to choose positions and save the shared order.
 New products appear at the end of the list.
 

@@ -32,7 +32,7 @@ const seedRows: Array<
 > = [
   ["ENV-001", "White Envelopes", 149, 600, 134, 336, 3],
   ["ENV-002", "Green Envelope", 0, 4930, 0, 0, 60],
-  ["LAB-001", "Label Roll", 200, 3000, 17, 350, 7],
+  ["LAB-001", "Label Roll", 200, 3000, 17, 3500, 7],
   ["LAB-002", "Label Pack", 750, 0, 61, 269, 3],
   ["GB-001", "Gut Boost", 12, 0, 0, 0, 10],
   ["BB-001", "Beauty Boost", 13, 0, 0, 0, 10],
