@@ -1172,8 +1172,8 @@ function App({ session }: { session: Session }) {
                           {productOrder.map((_, position) => <option key={position} value={position}>{position + 1}</option>)}
                         </select>
                       </label>
-                      <button className="secondary" aria-label={`Move ${product.name} up`} disabled={saving || index === 0} onClick={() => moveProduct(product.id, index - 1)}>?</button>
-                      <button className="secondary" aria-label={`Move ${product.name} down`} disabled={saving || index === productOrder.length - 1} onClick={() => moveProduct(product.id, index + 1)}>?</button>
+                      <button className="secondary" aria-label={`Move ${product.name} up`} disabled={saving || index === 0} onClick={() => moveProduct(product.id, index - 1)}><span aria-hidden="true">&uarr;</span></button>
+                      <button className="secondary" aria-label={`Move ${product.name} down`} disabled={saving || index === productOrder.length - 1} onClick={() => moveProduct(product.id, index + 1)}><span aria-hidden="true">&darr;</span></button>
                     </li>
                   ))}
                 </ol>
