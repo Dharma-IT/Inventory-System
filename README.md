@@ -7,6 +7,14 @@ first run, open the project's Supabase SQL Editor and run
 [`supabase-schema.sql`](./supabase-schema.sql). This creates the tables, browser
 policies, and the atomic `record_movement` function used by receipts and sales.
 
+## Delete movement logs
+
+Run [`supabase-delete-movement.sql`](./supabase-delete-movement.sql) in Supabase
+SQL Editor before using the movement log's **Delete** action, including on new
+installations. Deletion requires confirmation and atomically reverses the receipt
+or shipment's stock adjustment. Receipts cannot be deleted if this would make
+available stock negative. Failed deletions leave both the log and stock unchanged.
+
 ## Product display order
 
 For an existing installation, run [`supabase-product-order.sql`](./supabase-product-order.sql)

@@ -188,6 +188,17 @@ header > div > p:last-child,
   background: #fff;
   color: #243d34;
 }
+.delete-movement {
+  border: 1px solid #ebc9c5;
+  border-radius: 6px;
+  padding: 6px 10px;
+  background: #fff;
+  color: #a32922;
+  font-size: 12px;
+  font-weight: 600;
+}
+.delete-movement:hover:not(:disabled) { background: #fff1ef; }
+.delete-movement:disabled { opacity: 0.5; cursor: wait; }
 .metrics {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

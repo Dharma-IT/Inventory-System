@@ -99,4 +99,9 @@ export const database = {
         p_note: movement.note,
       }),
     }),
+  deleteMovement: (id: string) =>
+    request<ProductRecord>("rpc/delete_movement", {
+      method: "POST",
+      body: JSON.stringify({ p_id: id }),
+    }),
 };

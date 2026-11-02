@@ -149,6 +149,7 @@ function App({ session }: { session: Session }) {
   }
   const [products, setProducts] = useState<Product[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
+  const [deletingMovement, setDeletingMovement] = useState<string | null>(null);
   const [movementSort, setMovementSort] = useState<"Date" | Movement["type"]>("Date");
   const sortedMovements = useMemo(
     () => [...movements].sort((a, b) => {
@@ -620,6 +621,24 @@ function App({ session }: { session: Session }) {
       </div>
     );
   }
+  async function deleteMovement(movement: Movement) {
+    const product = products.find((p) => p.id === movement.productId);
+    if (deletingMovement || !window.confirm(
+      `Delete this ${movement.type.toLowerCase()} of ${fmt.format(movement.quantity)} ${product?.name || "units"}? This also reverses its stock adjustment and cannot be undone.`,
+    )) return;
+    setDeletingMovement(movement.id);
+    setDatabaseError("");
+    try {
+      const updated = await database.deleteMovement(movement.id);
+      setProducts((current) => current.map((p) => p.id === updated.id ? updated : p));
+      setMovements((current) => current.filter((m) => m.id !== movement.id));
+    } catch (error) {
+      setDatabaseError(error instanceof Error ? error.message : "Unable to delete movement.");
+    } finally {
+      setDeletingMovement(null);
+    }
+  }
+
   async function saveMovement(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const data = new FormData(e.currentTarget);
@@ -1100,6 +1119,7 @@ function App({ session }: { session: Session }) {
                     <th>Type</th>
                     <th>Quantity</th>
                     <th>Reference / note</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1126,6 +1146,16 @@ function App({ session }: { session: Session }) {
                           <strong>{fmt.format(m.quantity)}</strong>
                         </td>
                         <td>{m.note || "—"}</td>
+                        <td>
+                          <button
+                            className="delete-movement"
+                            disabled={deletingMovement !== null || loading || saving}
+                            aria-label={`Delete ${m.type.toLowerCase()} for ${p?.name || "unknown product"} on ${m.date}`}
+                            onClick={() => void deleteMovement(m)}
+                          >
+                            {deletingMovement === m.id ? "Deleting…" : "Delete"}
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}
