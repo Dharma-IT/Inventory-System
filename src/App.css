@@ -189,15 +189,21 @@ header > div > p:last-child,
   color: #243d34;
 }
 .delete-movement {
-  border: 1px solid #ebc9c5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid transparent;
   border-radius: 6px;
-  padding: 6px 10px;
-  background: #fff;
-  color: #a32922;
+  padding: 0;
+  background: transparent;
+  color: #7a8982;
   font-size: 12px;
   font-weight: 600;
 }
-.delete-movement:hover:not(:disabled) { background: #fff1ef; }
+.delete-movement:hover:not(:disabled) { background: #fff1ef; color: #a32922; }
+.delete-movement:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
 .delete-movement:disabled { opacity: 0.5; cursor: wait; }
 .metrics {
   display: grid;

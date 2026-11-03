@@ -1151,9 +1151,13 @@ function App({ session }: { session: Session }) {
                             className="delete-movement"
                             disabled={deletingMovement !== null || loading || saving}
                             aria-label={`Delete ${m.type.toLowerCase()} for ${p?.name || "unknown product"} on ${m.date}`}
+                            title={deletingMovement === m.id ? "Deleting movement…" : "Delete movement"}
+                            aria-busy={deletingMovement === m.id}
                             onClick={() => void deleteMovement(m)}
                           >
-                            {deletingMovement === m.id ? "Deleting…" : "Delete"}
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6" />
+                            </svg>
                           </button>
                         </td>
                       </tr>

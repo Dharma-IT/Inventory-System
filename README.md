@@ -15,6 +15,11 @@ installations. Deletion requires confirmation and atomically reverses the receip
 or shipment's stock adjustment. Receipts cannot be deleted if this would make
 available stock negative. Failed deletions leave both the log and stock unchanged.
 
+Existing installations must rerun this script to fix the “Movement not found”
+error caused by locking movements without an UPDATE policy. The function now
+uses DELETE RETURNING under the existing delete policy; stock validation failures
+roll back the entire operation. The activity log uses a trash icon with a tooltip.
+
 ## Product display order
 
 For an existing installation, run [`supabase-product-order.sql`](./supabase-product-order.sql)

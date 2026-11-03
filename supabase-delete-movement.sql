@@ -13,7 +13,10 @@ declare
   movement public.movements;
   product public.products;
 begin
-  select * into movement from public.movements where id = p_id for update;
+  -- Claim the row through its DELETE policy. SELECT FOR UPDATE also requires
+  -- an UPDATE policy, which movements intentionally do not have.
+  -- Any exception below rolls back this deletion and the stock adjustment.
+  delete from public.movements where id = p_id returning * into movement;
   if not found then
     raise exception 'Movement not found. Refresh the activity log and try again.';
   end if;
@@ -38,7 +41,6 @@ begin
       where id = movement.product_id returning * into product;
   end if;
 
-  delete from public.movements where id = p_id;
   return product;
 end;
 $$;

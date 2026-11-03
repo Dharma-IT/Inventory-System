@@ -47,7 +47,14 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   });
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(body || `Supabase request failed (${response.status})`);
+    let message = body;
+    try {
+      const error: unknown = JSON.parse(body);
+      if (typeof error === "object" && error !== null && "message" in error && typeof error.message === "string") {
+        message = error.message;
+      }
+    } catch { /* Non-JSON errors use the response text. */ }
+    throw new Error(message || `Supabase request failed (${response.status})`);
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
