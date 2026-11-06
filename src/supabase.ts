@@ -60,7 +60,21 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+export type LocationProduct = { id: string; name: string; storage: number; clinic: number };
+export type LocationActivity = { id: string; date: string; product_id: string; product_name: string; type: "Added" | "Transfer" | "Stock added" | "Adjusted" | "Deleted"; quantity: number; note: string };
+
 export const database = {
+  locationProducts: () => request<LocationProduct[]>("location_products?select=id,name,storage,clinic&order=created_at.asc"),
+  locationActivity: () => request<LocationActivity[]>("location_movements?select=id,date,product_id,product_name,type,quantity,note&order=created_at.desc"),
+  addLocationProduct: (name: string, quantity: number, location: string) => request<void>("rpc/add_location_product", {
+    method: "POST", body: JSON.stringify({ p_name: name, p_quantity: quantity, p_location: location }),
+  }),
+  changeLocationProduct: (id: string, quantity: number, location: string, action: "increase" | "edit" | "delete") => request<void>("rpc/change_location_product", {
+    method: "POST", body: JSON.stringify({ p_id: id, p_quantity: quantity, p_location: location, p_action: action }),
+  }),
+  transferProduct: (id: string, quantity: number, source: string) => request<void>("rpc/transfer_location_product", {
+    method: "POST", body: JSON.stringify({ p_id: id, p_quantity: quantity, p_source: source }),
+  }),
   products: () =>
     request<ProductRecord[]>(
       "products?select=id,name,sku,opening,received,shipped,weekly,lead,position&order=position.asc,created_at.asc,id.asc",

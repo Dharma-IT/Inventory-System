@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import "./App.css";
+import Transfers from "./Transfers";
+import type { LocationActivity } from "./supabase";
 import { database, supabase } from "./supabase";
 import type { Session } from "@supabase/supabase-js";
 import { fetchOrders } from "./ordersApi";
@@ -22,7 +24,8 @@ type Movement = {
   id: string;
   date: string;
   productId: string;
-  type: "Receipt" | "Shipment";
+  type: "Receipt" | "Shipment" | "Added" | "Transfer" | "Stock added" | "Adjusted" | "Deleted";
+  productName?: string;
   quantity: number;
   note: string;
 };
@@ -151,14 +154,29 @@ function App({ session }: { session: Session }) {
   const [movements, setMovements] = useState<Movement[]>([]);
   const [deletingMovement, setDeletingMovement] = useState<string | null>(null);
   const [movementSort, setMovementSort] = useState<"Date" | Movement["type"]>("Date");
+  const [locationActivity, setLocationActivity] = useState<LocationActivity[]>([]);
+  const [locationError, setLocationError] = useState("");
+  async function refreshLocationActivity() {
+    try {
+      setLocationActivity(await database.locationActivity());
+      setLocationError("");
+    } catch (error) {
+      setLocationError(error instanceof Error ? error.message : "Unable to load transfer activity.");
+    }
+  }
+  useEffect(() => {
+    database.locationActivity().then(setLocationActivity).catch((error: unknown) => {
+      setLocationError(error instanceof Error ? error.message : "Unable to load transfer activity.");
+    });
+  }, []);
   const sortedMovements = useMemo(
-    () => [...movements].sort((a, b) => {
+    () => [...movements, ...locationActivity.map((m) => ({ ...m, productId: m.product_id, productName: m.product_name }))].sort((a, b) => {
       if (movementSort !== "Date" && a.type !== b.type) {
         return a.type === movementSort ? -1 : 1;
       }
       return b.date.localeCompare(a.date);
     }),
-    [movements, movementSort],
+    [movements, locationActivity, movementSort],
   );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -188,7 +206,7 @@ function App({ session }: { session: Session }) {
   const [stockProductId, setStockProductId] = useState("");
   const [stockQuery, setStockQuery] = useState("");
   const [editing, setEditing] = useState<Product | null>(null);
-  const [view, setView] = useState<"inventory" | "labels" | "activity">(
+  const [view, setView] = useState<"inventory" | "labels" | "activity" | "transfers">(
     "inventory",
   );
 
@@ -726,8 +744,9 @@ function App({ session }: { session: Session }) {
             className={view === "inventory" ? "active" : ""}
             onClick={() => setView("inventory")}
           >
-            <span>▦</span> Inventory
+            <span>▦</span> Overview
           </button>
+          <button className={view === "transfers" ? "active" : ""} onClick={() => setView("transfers")}><span aria-hidden="true">&#8644;</span> Inventory</button>
           <button
             className={view === "labels" ? "active" : ""}
             onClick={() => setView("labels")}
@@ -771,17 +790,17 @@ function App({ session }: { session: Session }) {
                 ? "Inventory overview"
                 : view === "labels"
                   ? "Labels"
-                  : "Stock activity"}
+                  : view === "transfers" ? "Location inventory" : "Stock activity"}
             </h1>
             <p>
               {view === "inventory"
                 ? "Know what is available and what needs action."
                 : view === "labels"
                   ? "Create and manage product labels."
-                  : "Every receipt and shipment in one place."}
+                  : view === "transfers" ? "Manage products between Storage and Clinic." : "Every receipt, shipment, and transfer in one place."}
             </p>
           </div>
-          {view !== "labels" && (
+          {view !== "labels" && view !== "transfers" && (
             <div className="actions">
               {view === "inventory" && (
                 <button className="secondary" disabled={loading || !products.length} onClick={() => {
@@ -953,6 +972,8 @@ function App({ session }: { session: Session }) {
               </footer>
             </section>
           </>
+        ) : view === "transfers" ? (
+          <Transfers onChange={refreshLocationActivity} />
         ) : view === "labels" ? (
           <section className="panel labels-panel">
             <div className="labels-head">
@@ -1073,6 +1094,7 @@ function App({ session }: { session: Session }) {
           </section>
         ) : (
           <section className="panel activity-panel">
+            {locationError && <div className="database-error" role="alert">Transfer activity unavailable. Run supabase-transfers.sql if this feature is new, then refresh. {locationError}</div>}
             <div className="activity-head">
               <div>
                 <h2>Movement log</h2>
@@ -1090,6 +1112,8 @@ function App({ session }: { session: Session }) {
                     <option value="Date">Date (newest first)</option>
                     <option value="Receipt">Receipt first</option>
                     <option value="Shipment">Shipment first</option>
+                    <option value="Transfer">Transfer first</option>
+                    <option value="Added">Added first</option>
                   </select>
                 </label>
                 <button
@@ -1134,7 +1158,7 @@ function App({ session }: { session: Session }) {
                           )}
                         </td>
                         <td>
-                          <strong>{p?.name || "Unknown product"}</strong>
+                          <strong>{m.productName || p?.name || "Unknown product"}</strong>
                           <small className="block">{p?.sku}</small>
                         </td>
                         <td>
@@ -1147,7 +1171,7 @@ function App({ session }: { session: Session }) {
                         </td>
                         <td>{m.note || "—"}</td>
                         <td>
-                          <button
+                          {(m.type === "Receipt" || m.type === "Shipment") && <button
                             className="delete-movement"
                             disabled={deletingMovement !== null || loading || saving}
                             aria-label={`Delete ${m.type.toLowerCase()} for ${p?.name || "unknown product"} on ${m.date}`}
@@ -1158,7 +1182,7 @@ function App({ session }: { session: Session }) {
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                               <path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6" />
                             </svg>
-                          </button>
+                          </button>}
                         </td>
                       </tr>
                     );
