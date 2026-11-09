@@ -641,15 +641,24 @@ function App({ session }: { session: Session }) {
   }
   async function deleteMovement(movement: Movement) {
     const product = products.find((p) => p.id === movement.productId);
+    const isLocationMovement = movement.type !== "Receipt" && movement.type !== "Shipment";
+    const consequence = isLocationMovement
+      ? "This removes the activity entry only. Current Storage and Clinic quantities stay unchanged. This cannot be undone."
+      : "This also reverses its stock adjustment and cannot be undone.";
     if (deletingMovement || !window.confirm(
-      `Delete this ${movement.type.toLowerCase()} of ${fmt.format(movement.quantity)} ${product?.name || "units"}? This also reverses its stock adjustment and cannot be undone.`,
+      `Delete this ${movement.type.toLowerCase()} of ${fmt.format(movement.quantity)} ${movement.productName || product?.name || "units"}? ${consequence}`,
     )) return;
     setDeletingMovement(movement.id);
     setDatabaseError("");
     try {
-      const updated = await database.deleteMovement(movement.id);
-      setProducts((current) => current.map((p) => p.id === updated.id ? updated : p));
-      setMovements((current) => current.filter((m) => m.id !== movement.id));
+      if (isLocationMovement) {
+        await database.deleteLocationMovement(movement.id);
+        setLocationActivity((current) => current.filter((m) => m.id !== movement.id));
+      } else {
+        const updated = await database.deleteMovement(movement.id);
+        setProducts((current) => current.map((p) => p.id === updated.id ? updated : p));
+        setMovements((current) => current.filter((m) => m.id !== movement.id));
+      }
     } catch (error) {
       setDatabaseError(error instanceof Error ? error.message : "Unable to delete movement.");
     } finally {
@@ -973,7 +982,7 @@ function App({ session }: { session: Session }) {
             </section>
           </>
         ) : view === "transfers" ? (
-          <Transfers onChange={refreshLocationActivity} />
+          <Transfers onChange={refreshLocationActivity} catalog={products} onAddProduct={() => { setEditing(null); setModal("product"); }} />
         ) : view === "labels" ? (
           <section className="panel labels-panel">
             <div className="labels-head">
@@ -1171,10 +1180,10 @@ function App({ session }: { session: Session }) {
                         </td>
                         <td>{m.note || "—"}</td>
                         <td>
-                          {(m.type === "Receipt" || m.type === "Shipment") && <button
+                          <button
                             className="delete-movement"
                             disabled={deletingMovement !== null || loading || saving}
-                            aria-label={`Delete ${m.type.toLowerCase()} for ${p?.name || "unknown product"} on ${m.date}`}
+                            aria-label={`Delete ${m.type.toLowerCase()} for ${m.productName || p?.name || "unknown product"} on ${m.date}`}
                             title={deletingMovement === m.id ? "Deleting movement…" : "Delete movement"}
                             aria-busy={deletingMovement === m.id}
                             onClick={() => void deleteMovement(m)}
@@ -1182,7 +1191,7 @@ function App({ session }: { session: Session }) {
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                               <path d="M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6" />
                             </svg>
-                          </button>}
+                          </button>
                         </td>
                       </tr>
                     );

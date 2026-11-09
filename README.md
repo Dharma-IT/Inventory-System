@@ -126,3 +126,13 @@ export default defineConfig([
 ])
 
 ```
+
+## Location stock
+
+Run supabase-location-stock.sql once after supabase-location-actions.sql before deploying this update. It enables atomic stock receipts from the complete Overview catalog and removes the existing Berberine location stock, preserving Overview quantities and activity history. Inventory's Add product opens the shared catalog form; Add stock receives units into Storage or Clinic independently of Overview stock.
+
+
+## Delete location activity
+
+Run supabase-delete-location-movement.sql to enable deletion of Added, Transfer, Stock added, Adjusted, and Deleted activity entries. Confirmation explains that this removes history only and leaves Storage and Clinic stock unchanged, including when the product was already deleted. Overview Receipt and Shipment deletion continues to reverse stock adjustments.
+

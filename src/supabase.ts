@@ -65,7 +65,13 @@ export type LocationActivity = { id: string; date: string; product_id: string; p
 
 export const database = {
   locationProducts: () => request<LocationProduct[]>("location_products?select=id,name,storage,clinic&order=created_at.asc"),
+  deleteLocationMovement: (id: string) => request<void>("rpc/delete_location_movement", {
+    method: "POST", body: JSON.stringify({ p_id: id }),
+  }),
   locationActivity: () => request<LocationActivity[]>("location_movements?select=id,date,product_id,product_name,type,quantity,note&order=created_at.desc"),
+  addLocationStock: (productId: string, quantity: number, location: string) => request<void>("rpc/add_location_stock", {
+    method: "POST", body: JSON.stringify({ p_product_id: productId, p_quantity: quantity, p_location: location }),
+  }),
   addLocationProduct: (name: string, quantity: number, location: string) => request<void>("rpc/add_location_product", {
     method: "POST", body: JSON.stringify({ p_name: name, p_quantity: quantity, p_location: location }),
   }),
