@@ -932,12 +932,14 @@ function App({ session }: { session: Session }) {
                           <small>units</small>
                         </td>
                         <td>
-                          <div className="range">
+                          <div className={`range ${stock(p) < minimum(p) ? "below-minimum" : ""}`}>
                             <span>{fmt.format(minimum(p))}</span>
                             <div>
                               <i
                                 style={{
-                                  width: `${Math.max(0, Math.min(100, maximum(p) ? (stock(p) / maximum(p)) * 100 : 100))}%`,
+                                  width: `${stock(p) < minimum(p)
+                                    ? Math.max(4, (Math.max(0, stock(p)) / minimum(p)) * 10)
+                                    : Math.max(0, Math.min(100, maximum(p) ? (stock(p) / maximum(p)) * 100 : 100))}%`,
                                 }}
                               />
                             </div>

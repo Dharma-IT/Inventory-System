@@ -399,6 +399,9 @@ td > small {
   background: #83a794;
   border-radius: 5px;
 }
+.range.below-minimum i {
+  background: #c94b3c;
+}
 .badge {
   display: inline-flex;
   padding: 5px 8px;
